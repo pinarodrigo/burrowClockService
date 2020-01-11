@@ -1,0 +1,50 @@
+service: lambda--burrowclock-rest-api
+custom:
+  tableName: 'positions-${self:provider.stage}'
+  dynamodb:
+    stages:
+      - dev
+provider:
+  name: aws
+  runtime: nodejs8.10
+  stage: dev
+  region: eu-central-1
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource:
+        - { "Fn::GetAtt": ["PositionsDynamoDBTable", "Arn" ] }
+  environment:
+    POSITIONS_TABLE: ${self:custom.tableName}
+functions:
+  burrowclock-app:
+    handler: index.handler
+    events:
+      - http: ANY /
+      - http: 'ANY {proxy+}'
+resources:
+  Resources:
+    PositionsDynamoDBTable:
+      Type: 'AWS::DynamoDB::Table'
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: name
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: name
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:custom.tableName}
+plugins:
+  - serverless-dynamodb-local
+  - serverless-offline
