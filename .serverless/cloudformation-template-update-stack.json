@@ -165,7 +165,7 @@
           "S3Bucket": {
             "Ref": "ServerlessDeploymentBucket"
           },
-          "S3Key": "serverless/lambda--burrowclock-rest-api/dev/1578748639211-2020-01-11T13:17:19.211Z/lambda--burrowclock-rest-api.zip"
+          "S3Key": "serverless/lambda--burrowclock-rest-api/dev/1578750510910-2020-01-11T13:48:30.910Z/lambda--burrowclock-rest-api.zip"
         },
         "FunctionName": "lambda--burrowclock-rest-api-dev-burrowclock-app",
         "Handler": "index.handler",
@@ -176,7 +176,7 @@
             "Arn"
           ]
         },
-        "Runtime": "nodejs8.10",
+        "Runtime": "nodejs12.x",
         "Timeout": 6,
         "Environment": {
           "Variables": {
@@ -189,7 +189,7 @@
         "IamRoleLambdaExecution"
       ]
     },
-    "BurrowclockDashappLambdaVersionv9BqOcnGHBV7rWpsjs9yPIav1NZMRgLM1B3yY2SEs": {
+    "BurrowclockDashappLambdaVersionO36xHYSwcOFSM8JuYzHzp8Oobw8fNoJKtkU5eyem8": {
       "Type": "AWS::Lambda::Version",
       "DeletionPolicy": "Retain",
       "Properties": {
@@ -335,7 +335,7 @@
         "MethodResponses": []
       }
     },
-    "ApiGatewayDeployment1578748633122": {
+    "ApiGatewayDeployment1578750503772": {
       "Type": "AWS::ApiGateway::Deployment",
       "Properties": {
         "RestApiId": {
@@ -424,7 +424,7 @@
     "BurrowclockDashappLambdaFunctionQualifiedArn": {
       "Description": "Current Lambda function version",
       "Value": {
-        "Ref": "BurrowclockDashappLambdaVersionv9BqOcnGHBV7rWpsjs9yPIav1NZMRgLM1B3yY2SEs"
+        "Ref": "BurrowclockDashappLambdaVersionO36xHYSwcOFSM8JuYzHzp8Oobw8fNoJKtkU5eyem8"
       }
     },
     "ServiceEndpoint": {
