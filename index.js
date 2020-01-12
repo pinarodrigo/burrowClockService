@@ -5,7 +5,7 @@ const app = express();
 const AWS = require('aws-sdk');
 const uuid = require('node-uuid');
 
-const { POSITIONS_TABLE, IS_OFFLINE } = process.env;
+const { POSITIONS_TABLE, POIS_TABLE, IS_OFFLINE } = process.env;
 
 const dynamoDb = IS_OFFLINE === 'true' ?
     new AWS.DynamoDB.DocumentClient({
@@ -29,6 +29,18 @@ app.get('/position', (req, res) => {
     })
 });
 
+app.get('/poi', (req, res) => {
+    const params = {
+        TableName: POIS_TABLE,
+    };
+    dynamoDb.scan(params, (error, result) => {
+        if (error) {
+            res.status(400).json({ error: 'Error retrieving positions' });
+        }
+        const { Items: pois } = result;
+        res.json({ pois });
+    })
+});
 
 app.post('/position', (req, res) => {
     const { name, latitude, longitude } = req.body;
@@ -53,6 +65,29 @@ app.post('/position', (req, res) => {
     });
 });
 
+app.post('/poi', (req, res) => {
+    const { poiname, latitude, longitude } = req.body;
+    const positionId = uuid.v4();
+    const timestamp = Date.now();
+    const params = {
+        TableName: POIS_TABLE,
+        Item: {
+            positionId,
+            poiname,
+            latitude,
+            longitude,
+            timestamp,
+        },
+    };
+    dynamoDb.put(params, (error) => {
+        if (error) {
+            console.log('Error creating POI: ', error);
+            res.status(400).json({ error: 'Could not create POI' });
+        }
+        res.json({ positionId, poiname, latitude, longitude, timestamp });
+    });
+});
+
 
 app.get('/position/:name', (req, res) => {
     const { name } = req.params;
@@ -62,6 +97,7 @@ app.get('/position/:name', (req, res) => {
             name,
         },
     };
+    console.log("PARAMS:" + JSON.stringify(params));
     dynamoDb.get(params, (error, result) => {
         if (error) {
             res.status(400).json({ error: 'Error retrieving position' });
@@ -71,6 +107,28 @@ app.get('/position/:name', (req, res) => {
             res.json({ positionId, name, latitude, longitude, timestamp });
         } else {
             res.status(404).json({ error: `Position for: ${name} not found` });
+        }
+    });
+});
+
+app.get('/poi/:poiname', (req, res) => {
+    const { poiname } = req.params;
+    const params = {
+        TableName: POIS_TABLE,
+        Key: {
+            poiname,
+        },
+    };
+    console.log("PARAMS:" + JSON.stringify(params));
+    dynamoDb.get(params, (error, result) => {
+        if (error) {
+            res.status(400).json({ error: 'Error retrieving position' });
+        }
+        if (result.Item) {
+            const { positionId, poiname, latitude, longitude, timestamp } = result.Item;
+            res.json({ positionId, poiname, latitude, longitude, timestamp });
+        } else {
+            res.status(404).json({ error: `POI ${poiname} not found` });
         }
     });
 });
@@ -96,7 +154,7 @@ app.put('/position', (req, res) => {
 
 
 app.delete('/position/:name', (req, res) => {
-    const { positionId } = req.params;
+    const { name } = req.params;
     const params = {
         TableName: POSITIONS_TABLE,
         Key: {
@@ -112,7 +170,25 @@ app.delete('/position/:name', (req, res) => {
     });
 });
 
+app.delete('/poi/:poiname', (req, res) => {
+    const { poiname } = req.params;
+    const params = {
+        TableName: POSITIONS_TABLE,
+        Key: {
+            poiname,
+        },
+    };
+    dynamoDb.delete(params, (error) => {
+        if (error) {
+            console.log(`Error deleting POI ${poiname}`, error);
+            res.status(400).json({ error: 'Could not delete POI' });
+        }
+        res.json({ success: true });
+    });
+});
+
 app.get('/locate/:name', (req, res) => {
+    var jsonResult = new Object();
     const { name } = req.params;
     const params = {
         TableName: POSITIONS_TABLE,
@@ -120,29 +196,39 @@ app.get('/locate/:name', (req, res) => {
             name,
         },
     };
+
     dynamoDb.get(params, (error, result) => {
-        if (error) {
-            res.status(400).json({ error: 'Error retrieving position' });
-        }
         if (result.Item) {
-            const { positionId, name, latitude, longitude, timestamp } = result.Item;
-
-            //"48.814130","9.146436" are the coordinates from Gustav-Klein-str. 1, 70469
-            var distance = gdistance("48.814130", "9.146436", latitude, longitude);
-            var poiName = "undefined"
-            //TODO: get POI Data from DB
-            var isInPOI = isWhithinRadiusofPOI("48.814130", "9.146436", latitude, longitude, 50);
-            if (isInPOI) {
-                console.log(name + " is within the radius of POI: " + poiName);
-                poiName = "Casa";
-            } else {
-                console.log(name + " is not within the radius of POI: " + poiName);
-            }
-
-
-            res.json({ name, distance, poiName });
+            const poiparams = {
+                TableName: POIS_TABLE,
+            };
+            dynamoDb.scan(poiparams, (error, data) => {
+                if (error) {
+                    res.status(500).json({ error: 'Error retrieving POIs' });
+                } else {
+                    var found = false;
+                    data.Items.forEach(function (item) {
+                        if (isWhithinRadiusOfPOI(result.Item.latitude, result.Item.longitude, item.latitude, item.longitude, 50)) {
+                            jsonResult.name = name;
+                            jsonResult.poi = item.poiname;
+                            found = true;
+                        }
+                    });
+                    if (!found) {
+                        //Not near any POI, let's calculate the distance from home
+                        jsonResult.name = name;
+                        jsonResult.distance = gdistance("48.814130","9.146436",result.Item.latitude,result.Item.longitude);
+                        res.json(JSON.stringify(jsonResult));
+                    } else {
+                        res.json(JSON.stringify(jsonResult));
+                    }
+                }
+            })
         } else {
-            res.status(404).json({ error: `Position for: ${name} not found` });
+            console.log("No location information found for " + name);
+            jsonResult.name = name;
+            jsonResult.poi = "undefined";
+            res.json(JSON.stringify(jsonResult));
         }
     });
 });
@@ -173,7 +259,7 @@ function gdistance(latitude1, longitude1, latitude2, longitude2, radius) {
     return d2;
 }
 
-function isWhithinRadiusofPOI(latitude1, longitude1, latitude2, longitude2, radius) {
+function isWhithinRadiusOfPOI(latitude1, longitude1, latitude2, longitude2, radius) {
     var distance = gdistance(latitude1, longitude1, latitude2, longitude2);
     var meters = distance * 1000; // KM to meters
     if (meters <= radius) {

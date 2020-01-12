@@ -1,6 +1,7 @@
 service: lambda--burrowclock-rest-api
 custom:
-  tableName: 'positions-${self:provider.stage}'
+  positionTableName: 'positions-${self:provider.stage}'
+  poisTableName: 'pois-${self:provider.stage}'
   dynamodb:
     stages:
       - dev
@@ -20,8 +21,10 @@ provider:
         - dynamodb:DeleteItem
       Resource:
         - { "Fn::GetAtt": ["PositionsDynamoDBTable", "Arn" ] }
+        - { "Fn::GetAtt": ["POISDynamoDBTable", "Arn" ] }
   environment:
-    POSITIONS_TABLE: ${self:custom.tableName}
+    POSITIONS_TABLE: ${self:custom.positionTableName}
+    POIS_TABLE: ${self:custom.poisTableName}
 functions:
   burrowclock-app:
     handler: index.handler
@@ -44,7 +47,22 @@ resources:
         ProvisionedThroughput:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 1
-        TableName: ${self:custom.tableName}
+        TableName: ${self:custom.positionTableName}
+    POISDynamoDBTable:
+      Type: 'AWS::DynamoDB::Table'
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: poiname
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: poiname
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:custom.poisTableName}
 plugins:
   - serverless-dynamodb-local
   - serverless-offline
