@@ -6,6 +6,9 @@
 
 # RUN
 * sls offline start --migrate   // Runs local environment
+** Service available under:
+*** http://localhost:3000/position
+*** http://localhost:3000/poi
 
 # DEPLOYMENT
 * sls deploy // Deploys infrastructure and function changes
