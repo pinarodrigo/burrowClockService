@@ -8,10 +8,8 @@
 
 # DEPLOYMENT
 
-* sls deploy
-
-## to deploy changes in javascript
-* sls deploy function -f burrowclock-app 
+* sls deploy // Deploys infrastructure and function changes
+* sls deploy function -f burrowclock-app //Deploys changes in javascript
 
 
 
