@@ -43,7 +43,8 @@ app.get('/poi', (req, res) => {
 });
 
 app.post('/position', (req, res) => {
-    const { name, latitude, longitude } = req.body;
+    let { name, latitude, longitude } = req.body;
+    name = name.toLowerCase();
     const positionId = uuid.v4();
     const timestamp = Date.now();
     const params = {
@@ -189,7 +190,8 @@ app.delete('/poi/:poiname', (req, res) => {
 
 app.get('/locate/:name', (req, res) => {
     var jsonResult = new Object();
-    const { name } = req.params;
+    let { name } = req.params;
+    name = name.toLowerCase();
     const params = {
         TableName: POSITIONS_TABLE,
         Key: {
@@ -206,21 +208,24 @@ app.get('/locate/:name', (req, res) => {
                 if (error) {
                     res.status(500).json({ error: 'Error retrieving POIs' });
                 } else {
+                    res.contentType = "application/json"
+                    jsonResult.name = name;
+                    jsonResult.distance = gdistance("48.814130","9.146436",result.Item.latitude,result.Item.longitude);    
+                    
                     var found = false;
                     data.Items.forEach(function (item) {
                         if (isWhithinRadiusOfPOI(result.Item.latitude, result.Item.longitude, item.latitude, item.longitude, 50)) {
-                            jsonResult.name = name;
                             jsonResult.poi = item.poiname;
                             found = true;
                         }
                     });
                     if (!found) {
-                        //Not near any POI, let's calculate the distance from home
-                        jsonResult.name = name;
-                        jsonResult.distance = gdistance("48.814130","9.146436",result.Item.latitude,result.Item.longitude);
-                        res.json(JSON.stringify(jsonResult));
+                        //Not near any POI
+                        jsonResult.poi = "";
+
+                        res.json(jsonResult);
                     } else {
-                        res.json(JSON.stringify(jsonResult));
+                        res.json(jsonResult);
                     }
                 }
             })
