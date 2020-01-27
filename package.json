@@ -17,6 +17,7 @@
     "serverless-dynamodb-local": "^0.2.35",
     "serverless-http": "^2.3.0",
     "serverless-offline": "^5.12.1",
+    "superagent": "^5.2.1",
     "xmlhttprequest": "^1.8.0"
   }
 }

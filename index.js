@@ -4,10 +4,11 @@ const express = require('express');
 const app = express();
 const AWS = require('aws-sdk');
 const uuid = require('node-uuid');
-var XMLHttpRequest = require("xmlhttprequest").XMLHttpRequest;
+const superagent = require('superagent');
 
 const { POSITIONS_TABLE, POIS_TABLE, IS_OFFLINE } = process.env;
-const endpointIFTTT = 'https://maker.ifttt.com/trigger/transition/with/key/bJQmYS7tQFaNdmfLChbr0b   ';
+const endpointIFTTT = 'https://maker.ifttt.com/trigger/transition/with/key/bJQmYS7tQFaNdmfLChbr0b';
+const TEN_MINUTES = 10 * 60 * 1000;
 
 const dynamoDb = IS_OFFLINE === 'true' ?
     new AWS.DynamoDB.DocumentClient({
@@ -104,21 +105,23 @@ app.post('/owntracks', (req, res) => {
     }
 
     if (_type == 'transition') {
-        let { tid, desc, event } = req.body;
         console.log("Received command: " + _type + " in body " + JSON.stringify(req.body));
-        
-        var xmlhttp = new XMLHttpRequest();   // new HttpRequest instance 
-        xmlhttp.open("POST", endpointIFTTT);
-        xmlhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
 
+        let { tid, desc, event } = req.body;
         //TODO: Improve localization
         if (event == "enter") {
             event = "entró a";
         } else if (event == "leave") {
-            event = "salio de";
+            event = "salió de";
         }
-        
-        xmlhttp.send(JSON.stringify({ value1: tid, value2: desc, value3: event }));
+
+        superagent
+            .post(endpointIFTTT)
+            .send(JSON.stringify({ value1: tid, value2: desc, value3: event }))
+            .set('Content-Type', 'application/json')
+            .set('accept', 'json')
+            .then(console.log("Sent Request to IFTTT"))
+            .catch(console.error);
 
         res.status(200).json({ status: 'ok' });
     }
@@ -141,32 +144,38 @@ app.post('/owntracks', (req, res) => {
                 timestamp,
             },
         };
-        dynamoDb.put(params, (error) => {
-            if (error) {
-                console.log('Error creating position: ', error);
-                res.status(400).json({ error: 'Could not create position' });
-            }
-            const positionParams = {
-                TableName: POSITIONS_TABLE,
-            };
-            dynamoDb.scan(positionParams, (error, result) => {
+        
+        var tenMinutesAgo = Date.now() - TEN_MINUTES;
+        if (tst >= tenMinutesAgo) {
+            dynamoDb.put(params, (error) => {
                 if (error) {
-                    res.status(400).json({ error: 'Error retrieving positions' });
+                    console.log('Error creating position: ', error);
+                    res.status(400).json({ error: 'Could not create position' });
                 }
-
-                for (let index = 0; index < result.Items.length; index++) {
-                    result.Items[index]._type = "location";
-                    result.Items[index].tid = result.Items[index].name.substring(0, 2);
-                    result.Items[index].tst = result.Items[index].timestamp;
-                    result.Items[index].lat = result.Items[index].latitude;
-                    result.Items[index].lon = result.Items[index].longitude;
-                    result.Items[index].topic = "owntracks/" + result.Items[index].name + "/iphone"
+                const positionParams = {
+                    TableName: POSITIONS_TABLE,
                 };
+                dynamoDb.scan(positionParams, (error, result) => {
+                    if (error) {
+                        res.status(400).json({ error: 'Error retrieving positions' });
+                    }
 
-                const { Items: positions } = result;
-                res.json(positions);
-            })
-        });
+                    for (let index = 0; index < result.Items.length; index++) {
+                        result.Items[index]._type = "location";
+                        result.Items[index].tid = result.Items[index].name.substring(0, 2);
+                        result.Items[index].tst = result.Items[index].timestamp;
+                        result.Items[index].lat = result.Items[index].latitude;
+                        result.Items[index].lon = result.Items[index].longitude;
+                        result.Items[index].topic = "owntracks/" + result.Items[index].name + "/iphone"
+                    };
+
+                    const { Items: positions } = result;
+                    res.json(positions);
+                })
+            });
+        } else {
+            res.status(200).json({ message: 'Ignoring location update as it is older than half an hour' });
+        }
     } else if (_type == 'waypoint') {
         let { tst, desc, lat, lon } = req.body;
         latitude = lat;
