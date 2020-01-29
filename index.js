@@ -106,23 +106,37 @@ app.post('/owntracks', (req, res) => {
 
     if (_type == 'transition') {
         console.log("Received command: " + _type + " in body " + JSON.stringify(req.body));
+        let { tid, desc, event, lat, lon, tst } = req.body;
+        let username = req.query.u;
 
-        let { tid, desc, event } = req.body;
         //TODO: Improve localization
         if (event == "enter") {
-            event = "entró a";
+            event = "está llegando a";
         } else if (event == "leave") {
             event = "salió de";
         }
 
-        superagent
-            .post(endpointIFTTT)
-            .send(JSON.stringify({ value1: tid, value2: desc, value3: event }))
-            .set('Content-Type', 'application/json')
-            .set('accept', 'json')
-            .end(function (err, response) {
-                res.status(200).json({ status: 'ok' });
-            })
+        addPositionForUser(username, lat, lon, tst).then(function (result) {
+            if (result) {
+                superagent
+                    .post(endpointIFTTT)
+                    .send(JSON.stringify({ value1: tid, value2: desc, value3: event }))
+                    .set('Content-Type', 'application/json')
+                    .set('accept', 'json')
+                    .end(function (err, response) {
+                        if (err) {
+                            console.log("Error contacting IFTTT");
+                            res.status(200).json({ error: 'Error contacting IFTTT' });
+                        }
+
+                        console.log("Location updated due to a transition, notification sent to IFTTT");
+                        res.status(200).json({ status: 'Location updated due to a transition, notification sent to IFTTT' });
+                    })
+            } else {
+                console.log("Location not updated, transition data is older");
+                res.status(200).json({ error: 'Location not updated, transition data is older' });
+            }
+        });
     }
 
     if (_type == 'location') {
@@ -133,41 +147,48 @@ app.post('/owntracks', (req, res) => {
         timestamp = tst;
         name = topic.split('/')[1].toLowerCase();
 
-        const params = {
-            TableName: POSITIONS_TABLE,
-            Item: {
-                positionId,
-                name,
-                latitude,
-                longitude,
-                timestamp,
-            },
-        };
-        dynamoDb.put(params, (error) => {
-            if (error) {
-                console.log('Error creating position: ', error);
-                res.status(400).json({ error: 'Could not create position' });
-            }
-            const positionParams = {
-                TableName: POSITIONS_TABLE,
-            };
-            dynamoDb.scan(positionParams, (error, result) => {
-                if (error) {
-                    res.status(400).json({ error: 'Error retrieving positions' });
-                }
-
-                for (let index = 0; index < result.Items.length; index++) {
-                    result.Items[index]._type = "location";
-                    result.Items[index].tid = result.Items[index].name.substring(0, 2);
-                    result.Items[index].tst = result.Items[index].timestamp;
-                    result.Items[index].lat = result.Items[index].latitude;
-                    result.Items[index].lon = result.Items[index].longitude;
-                    result.Items[index].topic = "owntracks/" + result.Items[index].name + "/iphone"
+        isPositionNewer(name, tst).then(function (result) {
+            if (result) {
+                const params = {
+                    TableName: POSITIONS_TABLE,
+                    Item: {
+                        positionId,
+                        name,
+                        latitude,
+                        longitude,
+                        timestamp,
+                    },
                 };
+                dynamoDb.put(params, (error) => {
+                    if (error) {
+                        console.log('Error creating position: ', error);
+                        res.status(400).json({ error: 'Could not create position' });
+                    }
+                    const positionParams = {
+                        TableName: POSITIONS_TABLE,
+                    };
+                    dynamoDb.scan(positionParams, (error, result) => {
+                        if (error) {
+                            res.status(400).json({ error: 'Error retrieving positions' });
+                        }
 
-                const { Items: positions } = result;
-                res.json(positions);
-            })
+                        for (let index = 0; index < result.Items.length; index++) {
+                            result.Items[index]._type = "location";
+                            result.Items[index].tid = result.Items[index].name.substring(0, 2);
+                            result.Items[index].tst = result.Items[index].timestamp;
+                            result.Items[index].lat = result.Items[index].latitude;
+                            result.Items[index].lon = result.Items[index].longitude;
+                            result.Items[index].topic = "owntracks/" + result.Items[index].name + "/iphone"
+                        };
+
+                        const { Items: positions } = result;
+                        res.json(positions);
+                    })
+                });
+            } else {
+                console.log("Ignoring position update, newer entry already exists!");
+                res.status(200).json({ status: 'ok' });
+            }
         });
     } else if (_type == 'waypoint') {
         let { tst, desc, lat, lon } = req.body;
@@ -373,6 +394,65 @@ function gdistance(latitude1, longitude1, latitude2, longitude2, radius) {
     var d = R * c;     // Meters
     var d2 = d / 1000; // Meters to KM
     return d2;
+}
+
+async function isPositionNewer(name, tst) {
+    const params = {
+        TableName: POSITIONS_TABLE,
+        Key: {
+            name,
+        },
+    };
+    try {
+        var positionIsNewer = true;
+        const result = await dynamoDb.scan(params).promise();
+        if (result && result.Items) {
+            for (let index = 0; index < result.Items.length; index++) {
+                recordTimeStamp = result.Items[index].timestamp;
+                if (tst < recordTimeStamp) {
+                    positionIsNewer = false;
+                }
+            }
+            ;
+        } else {
+            positionIsNewer = true;
+        }
+
+        return positionIsNewer;
+    } catch (error) {
+        console.error(error);
+        return false;
+    }
+}
+
+
+async function addPositionForUser(username, latitude, longitude, tst) {
+    name = username.toLowerCase();
+    const positionId = uuid.v4();
+    const timestamp = tst;
+    const params = {
+        TableName: POSITIONS_TABLE,
+        Item: {
+            positionId,
+            name,
+            latitude,
+            longitude,
+            timestamp,
+        },
+    };
+    var recordAdded = false;
+    try {
+        await isPositionNewer(name, tst).then(async function (result) {
+            if (result) {
+                await dynamoDb.put(params).promise();
+                recordAdded = true;
+            }
+        });
+    } catch (error) {
+        console.error(error);
+        recordAdded = false;
+    }
+    return recordAdded;
 }
 
 function isWhithinRadiusOfPOI(latitude1, longitude1, latitude2, longitude2, radius) {
