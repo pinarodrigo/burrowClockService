@@ -120,7 +120,7 @@ app.post('/owntracks', (req, res) => {
             if (result) {
                 superagent
                     .post(endpointIFTTT)
-                    .send(JSON.stringify({ value1: tid, value2: desc, value3: event }))
+                    .send(JSON.stringify({ value1: username, value2: desc, value3: event }))
                     .set('Content-Type', 'application/json')
                     .set('accept', 'json')
                     .end(function (err, response) {
@@ -145,7 +145,7 @@ app.post('/owntracks', (req, res) => {
         longitude = lon;
         positionId = uuid.v4();
         timestamp = tst;
-        name = topic.split('/')[1].toLowerCase();
+        name = req.query.u;
 
         isPositionNewer(name, tst).then(function (result) {
             if (result) {
@@ -174,7 +174,11 @@ app.post('/owntracks', (req, res) => {
 
                         for (let index = 0; index < result.Items.length; index++) {
                             result.Items[index]._type = "location";
-                            result.Items[index].tid = result.Items[index].name.substring(0, 2);
+                            if (result.Items[index].name == "victoria") {
+                                result.Items[index].tid = "to"
+                            } else {
+                                result.Items[index].tid = result.Items[index].name.substring(0, 2);
+                            }
                             result.Items[index].tst = result.Items[index].timestamp;
                             result.Items[index].lat = result.Items[index].latitude;
                             result.Items[index].lon = result.Items[index].longitude;

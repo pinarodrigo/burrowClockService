@@ -17,4 +17,4 @@
 * sls deploy function -f burrowclock-app //Deploys changes in javascript only
 
 ## CLEAN AWS RESOURCES
-* sls remvoe
+* sls remove
