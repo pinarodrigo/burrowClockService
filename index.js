@@ -146,48 +146,57 @@ app.post('/owntracks', (req, res) => {
         positionId = uuid.v4();
         timestamp = tst;
         name = req.query.u;
+        poi = "undefined";
 
         isPositionNewer(name, tst).then(function (result) {
             if (result) {
-                const params = {
-                    TableName: POSITIONS_TABLE,
-                    Item: {
-                        positionId,
-                        name,
-                        latitude,
-                        longitude,
-                        timestamp,
-                    },
-                };
-                dynamoDb.put(params, (error) => {
-                    if (error) {
-                        console.log('Error creating position: ', error);
-                        res.status(400).json({ error: 'Could not create position' });
+
+                isWhithinPOI(latitude, longitude, 20).then(function (result) {
+                    if (result != "undefined") {
+                        poi = result;
                     }
-                    const positionParams = {
+
+                    const params = {
                         TableName: POSITIONS_TABLE,
+                        Item: {
+                            positionId,
+                            name,
+                            latitude,
+                            longitude,
+                            timestamp,
+                            poi
+                        },
                     };
-                    dynamoDb.scan(positionParams, (error, result) => {
+                    dynamoDb.put(params, (error) => {
                         if (error) {
-                            res.status(400).json({ error: 'Error retrieving positions' });
+                            console.log('Error creating position: ', error);
+                            res.status(400).json({ error: 'Could not create position' });
                         }
-
-                        for (let index = 0; index < result.Items.length; index++) {
-                            result.Items[index]._type = "location";
-                            if (result.Items[index].name == "victoria") {
-                                result.Items[index].tid = "to"
-                            } else {
-                                result.Items[index].tid = result.Items[index].name.substring(0, 2);
-                            }
-                            result.Items[index].tst = result.Items[index].timestamp;
-                            result.Items[index].lat = result.Items[index].latitude;
-                            result.Items[index].lon = result.Items[index].longitude;
-                            result.Items[index].topic = "owntracks/" + result.Items[index].name + "/iphone"
+                        const positionParams = {
+                            TableName: POSITIONS_TABLE,
                         };
-
-                        const { Items: positions } = result;
-                        res.json(positions);
-                    })
+                        dynamoDb.scan(positionParams, (error, result) => {
+                            if (error) {
+                                res.status(400).json({ error: 'Error retrieving positions' });
+                            }
+    
+                            for (let index = 0; index < result.Items.length; index++) {
+                                result.Items[index]._type = "location";
+                                if (result.Items[index].name == "victoria") {
+                                    result.Items[index].tid = "to"
+                                } else {
+                                    result.Items[index].tid = result.Items[index].name.substring(0, 2);
+                                }
+                                result.Items[index].tst = result.Items[index].timestamp;
+                                result.Items[index].lat = result.Items[index].latitude;
+                                result.Items[index].lon = result.Items[index].longitude;
+                                result.Items[index].topic = "owntracks/" + result.Items[index].name + "/iphone"
+                            };
+    
+                            const { Items: positions } = result;
+                            res.json(positions);
+                        })
+                    });
                 });
             } else {
                 console.log("Ignoring position update, newer entry already exists!");
@@ -416,8 +425,7 @@ async function isPositionNewer(name, tst) {
                 if (tst < recordTimeStamp) {
                     positionIsNewer = false;
                 }
-            }
-            ;
+            };
         } else {
             positionIsNewer = true;
         }
@@ -467,6 +475,26 @@ function isWhithinRadiusOfPOI(latitude1, longitude1, latitude2, longitude2, radi
     } else {
         return false;
     }
+}
+
+async function isWhithinPOI(latitude, longitude, radius) {
+    const poiparams = {
+        TableName: POIS_TABLE,
+    };
+    var isNearThisPOI = "undefined";
+    const result = await dynamoDb.scan(poiparams).promise();
+    if (result && result.Items) {
+        for (let index = 0; index < result.Items.length; index++) {
+            if (isWhithinRadiusOfPOI(result.Items[index].latitude, result.Items[index].longitude, latitude, longitude, radius)) {
+                isNearThisPOI = result.Items[index].poiname;
+                console.log("user located in: " + isNearThisPOI);
+            }
+        };
+    } else {
+        isNearThisPOI = "undefined";
+    }
+
+    return isNearThisPOI;
 }
 
 module.exports.handler = serverless(app);
