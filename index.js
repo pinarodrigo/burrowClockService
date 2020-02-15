@@ -49,7 +49,7 @@ app.post('/position', (req, res) => {
     let { name, latitude, longitude } = req.body;
     name = name.toLowerCase();
     const positionId = uuid.v4();
-    const timestamp = Date.now();
+    const timestamp = Math.floor(new Date().getTime() / 1000);
     const params = {
         TableName: POSITIONS_TABLE,
         Item: {
@@ -95,19 +95,21 @@ app.post('/poi', (req, res) => {
 
 app.post('/owntracks', (req, res) => {
     let _type = req.body._type;
+    let username = req.query.u;
+    console.log(username + " sent command: " + _type + " in body " + JSON.stringify(req.body));
+
     if (typeof _type == 'undefined') {
-        console.log('Error creating Owntrack record');
+        console.error('Error creating Owntrack record');
         res.status(500).json({ error: 'Could not create record' });
     }
+    
     if (_type == 'waypoints' || _type == "dump" || _type == "lwt" || _type == "configuration" || _type == "beacon" || _type == "cmd" || _type == "steps" || _type == "card" || _type == "encrypted") {
         console.log("Received command: " + _type + " in body " + JSON.stringify(req.body));
         res.status(200).json({ status: 'ok' });
     }
 
     if (_type == 'transition') {
-        console.log("Received command: " + _type + " in body " + JSON.stringify(req.body));
         let { tid, desc, event, lat, lon, tst } = req.body;
-        let username = req.query.u;
 
         //TODO: Improve localization
         if (event == "enter") {
@@ -125,7 +127,7 @@ app.post('/owntracks', (req, res) => {
                     .set('accept', 'json')
                     .end(function (err, response) {
                         if (err) {
-                            console.log("Error contacting IFTTT");
+                            console.error("Error contacting IFTTT");
                             res.status(200).json({ error: 'Error contacting IFTTT' });
                         }
 
@@ -169,7 +171,7 @@ app.post('/owntracks', (req, res) => {
                     };
                     dynamoDb.put(params, (error) => {
                         if (error) {
-                            console.log('Error creating position: ', error);
+                            console.error('Error creating position: ', error);
                             res.status(400).json({ error: 'Could not create position' });
                         }
                         const positionParams = {
@@ -179,7 +181,7 @@ app.post('/owntracks', (req, res) => {
                             if (error) {
                                 res.status(400).json({ error: 'Error retrieving positions' });
                             }
-    
+
                             for (let index = 0; index < result.Items.length; index++) {
                                 result.Items[index]._type = "location";
                                 if (result.Items[index].name == "victoria") {
@@ -192,7 +194,7 @@ app.post('/owntracks', (req, res) => {
                                 result.Items[index].lon = result.Items[index].longitude;
                                 result.Items[index].topic = "owntracks/" + result.Items[index].name + "/iphone"
                             };
-    
+
                             const { Items: positions } = result;
                             res.json(positions);
                         })
@@ -227,7 +229,7 @@ app.post('/owntracks', (req, res) => {
         };
         dynamoDb.put(params, (error) => {
             if (error) {
-                console.log('Error creating POI: ', error);
+                console.error('Error creating POI: ', error);
                 res.status(400).json({ error: 'Could not create POI' });
             }
             res.json({ positionId, poiname, latitude, longitude, timestamp });
@@ -319,7 +321,7 @@ app.delete('/position/:name', (req, res) => {
 app.delete('/poi/:poiname', (req, res) => {
     const { poiname } = req.params;
     const params = {
-        TableName: POSITIONS_TABLE,
+        TableName: POIS_TABLE,
         Key: {
             poiname,
         },
