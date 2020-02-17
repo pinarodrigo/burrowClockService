@@ -100,7 +100,7 @@ app.post('/owntracks', (req, res) => {
 
     if (typeof _type == 'undefined') {
         console.error('Error creating Owntrack record');
-        res.status(500).json({ error: 'Could not create record' });
+        res.status(200).json({ status: 'Could not create record' });
     }
     
     if (_type == 'waypoints' || _type == "dump" || _type == "lwt" || _type == "configuration" || _type == "beacon" || _type == "cmd" || _type == "steps" || _type == "card" || _type == "encrypted") {
@@ -412,26 +412,31 @@ function gdistance(latitude1, longitude1, latitude2, longitude2, radius) {
 }
 
 async function isPositionNewer(name, tst) {
+    var positionIsNewer = true;
     const params = {
         TableName: POSITIONS_TABLE,
-        Key: {
-            name,
+        KeyConditionExpression: "#n = :na",
+        ExpressionAttributeNames:{
+            "#n": "name"
         },
+        ExpressionAttributeValues: {
+            ":na": name
+        }
     };
     try {
-        var positionIsNewer = true;
-        const result = await dynamoDb.scan(params).promise();
-        if (result && result.Items) {
-            for (let index = 0; index < result.Items.length; index++) {
-                recordTimeStamp = result.Items[index].timestamp;
-                if (tst < recordTimeStamp) {
-                    positionIsNewer = false;
-                }
-            };
-        } else {
-            positionIsNewer = true;
-        }
-
+        await dynamoDb.query(params).promise().then(async function (result) {
+            if (result && result.Items) {
+                for (let index = 0; index < result.Items.length; index++) {
+                    recordTimeStamp = result.Items[index].timestamp;
+                    console.log("Checking record of user: " + result.Items[index].name);
+                    console.log("Record timestamp: " + recordTimeStamp);
+                    console.log("Request timestamp: " + tst);
+                    if (Number(tst) < Number(recordTimeStamp)) {
+                        positionIsNewer = false;
+                    }
+                };
+            }
+        });
         return positionIsNewer;
     } catch (error) {
         console.error(error);
