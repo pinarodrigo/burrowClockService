@@ -102,7 +102,7 @@ app.post('/owntracks', (req, res) => {
         console.error('Error creating Owntrack record');
         res.status(200).json({ status: 'Could not create record' });
     }
-    
+
     if (_type == 'waypoints' || _type == "dump" || _type == "lwt" || _type == "configuration" || _type == "beacon" || _type == "cmd" || _type == "steps" || _type == "card" || _type == "encrypted") {
         console.log("Received command: " + _type + " in body " + JSON.stringify(req.body));
         res.status(200).json({ status: 'ok' });
@@ -385,6 +385,47 @@ app.get('/locate/:name', (req, res) => {
     });
 });
 
+app.get('/route/:name', (req, res) => {
+    var jsonResult = new Object();
+    let { name } = req.params;
+    name = name.toLowerCase();
+
+    let locationService = "http://139.59.143.246:8080/rest/items/GPSLocation_" + name;
+
+    superagent
+        .get(locationService)
+        .end(function (err, response) {
+            if (err) {
+                console.error("Error contacting OpenHAB");
+                res.status(500).json({ error: 'Error contacting OpenHAB' });
+            }
+            console.log("Response from openHAB: " + response.text.replace('\\', ''));
+            let location = JSON.parse(response.text.replace('\\', '')).state;
+            let routingService = "https://router.hereapi.com/v8/routes?transportMode=pedestrian&origin=" + location + "&destination=48.813809,9.146184&return=summary&apiKey=JLTGUJZyrKvBH3G8skzEYsbhDM1l9KgTsiaVh3cZJxc";
+
+            superagent
+                .get(routingService)
+                .end(function (err, response) {
+                    if (err) {
+                        console.error("Error contacting HERE API");
+                        res.status(500).json({ error: 'Error contacting HERE API' });
+                    }
+                    let responseSummary = JSON.parse(response.text.replace('\\', '')).routes[0].sections[0].summary;
+                    console.log("Response from HERE API: " + response.text.replace('\\', ''));
+                    jsonResult.name = name;
+                    jsonResult.distance = responseSummary.length;
+                    jsonResult.time = responseSummary.duration;
+                    if (jsonResult.distance <= 10) {
+                        jsonResult.poi = "casa";
+                    } else {
+                        jsonResult.poi = "undefined";
+                    }
+
+                    res.json(jsonResult);
+                });
+        });
+});
+
 
 function gdistance(latitude1, longitude1, latitude2, longitude2, radius) {
     if (!latitude1 || !longitude1 || !latitude2 || !longitude2) {
@@ -416,7 +457,7 @@ async function isPositionNewer(name, tst) {
     const params = {
         TableName: POSITIONS_TABLE,
         KeyConditionExpression: "#n = :na",
-        ExpressionAttributeNames:{
+        ExpressionAttributeNames: {
             "#n": "name"
         },
         ExpressionAttributeValues: {
