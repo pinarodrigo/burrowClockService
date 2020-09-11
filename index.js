@@ -390,7 +390,7 @@ app.get('/route/:name', (req, res) => {
     let { name } = req.params;
     name = name.toLowerCase();
 
-    let locationService = "http://139.59.143.246:8080/rest/items/GPSLocation_" + name;
+    let locationService = "http://openhab.pinanet.de:8080/rest/items/GPSLocation_" + name;
 
     superagent
         .get(locationService)
