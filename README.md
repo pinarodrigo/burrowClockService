@@ -1,5 +1,7 @@
 # BURROW CLOCK SERVICE
 
+Lambda service to manage request from the Owntracks App and prepare content for the Burrow Clock skill
+
 ## INSTALL
 1. npm install -g serverless
 2. serverless login
