@@ -399,29 +399,48 @@ app.get('/route/:name', (req, res) => {
                 console.error("Error contacting OpenHAB");
                 res.status(500).json({ error: 'Error contacting OpenHAB' });
             }
-            console.log("Response from openHAB: " + response.text.replace('\\', ''));
+            //console.log("Response from openHAB: " + response.text.replace('\\', ''));
             let location = JSON.parse(response.text.replace('\\', '')).state;
+            console.log("Location: " + location);
             let routingService = "https://router.hereapi.com/v8/routes?transportMode=pedestrian&origin=" + location + "&destination=48.813809,9.146184&return=summary&apiKey=JLTGUJZyrKvBH3G8skzEYsbhDM1l9KgTsiaVh3cZJxc";
+            let poiService = "https://fleet.ls.hereapi.com/2/search/proximity.json?apiKey=JLTGUJZyrKvBH3G8skzEYsbhDM1l9KgTsiaVh3cZJxc&proximity=" + location + ",15&layer_ids=feuerbach";
 
             superagent
                 .get(routingService)
                 .end(function (err, response) {
                     if (err) {
-                        console.error("Error contacting HERE API");
-                        res.status(500).json({ error: 'Error contacting HERE API' });
+                        console.error("Error contacting HERE ROUTING API");
+                        res.status(500).json({ error: 'Error contacting HERE ROUTING API' });
                     }
                     let responseSummary = JSON.parse(response.text.replace('\\', '')).routes[0].sections[0].summary;
-                    console.log("Response from HERE API: " + response.text.replace('\\', ''));
+                    //console.log("Response from HERE API: " + response.text.replace('\\', ''));
                     jsonResult.name = name;
                     jsonResult.distance = responseSummary.length;
                     jsonResult.time = responseSummary.duration;
-                    if (jsonResult.distance <= 10) {
+                    console.log("JSON Result: " + JSON.stringify(jsonResult));
+                    if (jsonResult.distance > 0 && jsonResult.distance < 10) {
                         jsonResult.poi = "casa";
                     } else {
-                        jsonResult.poi = "undefined";
-                    }
+                        superagent
+                            .get(poiService)
+                            .end(function (err, response) {
+                                if (err) {
+                                    console.error("Error contacting HERE POI API");
+                                    res.status(500).json({ error: 'Error contacting HERE POI API' });
+                                }
+                                //console.log(JSON.parse(response.text.replace('\\', '')).geometries[0]);
+                                if (JSON.parse(response.text.replace('\\', '')).geometries[0]) {
+                                    let poiName = JSON.parse(response.text.replace('\\', '')).geometries[0].attributes.NAME;
+                                    //console.log("Response from HERE POI API: " + response.text.replace('\\', ''));
+                                    jsonResult.poi = poiName.toLowerCase();
+                                } else {
+                                    jsonResult.poi = "undefined";
+                                }
 
-                    res.json(jsonResult);
+                                console.log("JSON Result with POI: " + JSON.stringify(jsonResult));
+                                res.json(jsonResult);
+                            });
+                    }
                 });
         });
 });
